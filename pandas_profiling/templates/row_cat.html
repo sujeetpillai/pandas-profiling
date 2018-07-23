@@ -1,6 +1,6 @@
 {% include '_row_header.html' %}
 <div class="col-md-3">
-    <table class="stats ">
+    <table class="table">
         <tr class="{{ row_classes['distinct_count'] }}">
             <th>Distinct count</th>
             <td>{{ values['distinct_count'] }}</td>
@@ -16,6 +16,14 @@
         <tr class="{{ row_classes['p_missing'] }}">
             <th>Missing (n)</th>
             <td>{{ values['n_missing'] }}</td>
+        </tr>
+        <tr>
+            <th>Top mask</th>
+            <td>{{ values['top_mask'] }} ({{ values['freq_mask'] }} %)</td>
+        </tr>
+        <tr>
+            <th>Special Characters</th>
+            <td>{{ values['sc_set'] }}</td>
         </tr>
     </table>
 </div>

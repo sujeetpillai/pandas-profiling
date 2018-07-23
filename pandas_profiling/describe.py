@@ -12,6 +12,7 @@ import pandas_profiling.formatters as formatters
 import pandas_profiling.base as base
 from pandas_profiling.plot import histogram, mini_histogram
 
+
 def describe_numeric_1d(series, **kwargs):
     """Compute summary statistics of a numerical (`TYPE_NUM`) variable (a Series).
 
@@ -81,6 +82,47 @@ def describe_date_1d(series):
     stats['mini_histogram'] = mini_histogram(series)
     return pd.Series(stats, name=series.name)
 
+
+def getMask(field):
+    mask = ''
+    if str(field) == 'nan':
+        mask = '-null-'
+    else:
+        for character in str(field):
+            if 65 <= ord(character) <= 90:  # ascii 65 to 90 are Capital letters
+                mask = mask + 'L'
+            elif 97 <= ord(character) <= 122:  # ascii 97 to 122 are lower case letters
+                mask = mask + 'l'
+            elif 48 <= ord(character) <= 57:  # ascii 48 to 57 are digits
+                mask = mask + 'D'
+            elif ord(character) == 32:
+                mask = mask + 's'
+            else:
+                mask = mask + character
+    return mask
+
+
+def mask_profile(series):
+    '''
+    Make a mask profile of a field by converting the ascii value of the character as below.
+    a to z --> returns "l" for letter
+    A to Z --> returns "L" for Letter
+    0 to 9 --> returns "D" for Digit
+    'space' --> returns "s" for space
+    Special characters --> keep original
+    Requirement: pandas
+    Input: pandas Series
+    '''
+
+    value = series.apply(getMask).value_counts()
+    percentage = round(series.apply(getMask).value_counts(normalize=True) * 100, 2)
+    result = pd.DataFrame(value)
+    result['%'] = pd.DataFrame(percentage)
+    result.columns = ['Count', '%']
+    return result
+
+
+import re
 def describe_categorical_1d(series):
     """Compute summary statistics of a categorical (`TYPE_CAT`) variable (a Series).
 
@@ -104,7 +146,23 @@ def describe_categorical_1d(series):
         names += ['top', 'freq', 'type']
         result += [top, freq, base.TYPE_CAT]
 
+        # Add a mask type
+        mask = series.apply(getMask)[series.apply(pd.notnull)]
+        mask.name=mask.name+'_mask'
+        mask_value_counts, mask_distinct_count = base.get_groupby_statistic(mask)
+        names += ['top_mask', 'freq_mask']
+        result += [mask_value_counts.index[0], '%0.0f' % (100.0*mask_value_counts.iloc[0]/len(mask))]
+
+        # Find all special characters
+        sc = mask.apply(lambda x:re.sub(r'[lLDs]','',x))
+        sc_list = ''.join(sc.values)
+        sc_set = ' '.join(set(list(sc_list)))
+        names.append('sc_set')
+        result.append(sc_set)
+
+
     return pd.Series(result, index=names, name=series.name)
+
 
 def describe_boolean_1d(series):
     """Compute summary statistics of a boolean (`TYPE_BOOL`) variable (a Series).
@@ -130,6 +188,7 @@ def describe_boolean_1d(series):
 
     return pd.Series(result, index=names, name=series.name)
 
+
 def describe_constant_1d(series):
     """Compute summary statistics of a constant (`S_TYPE_CONST`) variable (a Series).
 
@@ -145,6 +204,7 @@ def describe_constant_1d(series):
     """
     return pd.Series([base.S_TYPE_CONST], index=['type'], name=series.name)
 
+
 def describe_unique_1d(series):
     """Compute summary statistics of a unique (`S_TYPE_UNIQUE`) variable (a Series).
 
@@ -159,6 +219,7 @@ def describe_unique_1d(series):
         The description of the variable as a Series with index being stats keys.
     """
     return pd.Series([base.S_TYPE_UNIQUE], index=['type'], name=series.name)
+
 
 def describe_supported(series, **kwargs):
     """Compute summary statistics of a supported variable (a Series).
@@ -200,6 +261,7 @@ def describe_supported(series, **kwargs):
 
     return pd.Series(results_data, name=series.name)
 
+
 def describe_unsupported(series, **kwargs):
     """Compute summary statistics of a unsupported (`S_TYPE_UNSUPPORTED`) variable (a Series).
 
@@ -231,6 +293,7 @@ def describe_unsupported(series, **kwargs):
         results_data['memorysize'] = 0
 
     return pd.Series(results_data, name=series.name)
+
 
 def describe_1d(data, **kwargs):
     """Compute summary statistics of a variable (a Series).
@@ -278,10 +341,13 @@ def describe_1d(data, **kwargs):
 
     return result
 
+
 def multiprocess_func(x, **kwargs):
     return x[0], describe_1d(x[1], **kwargs)
 
-def describe(df, bins=10, check_correlation=True, correlation_threshold=0.9, correlation_overrides=None, check_recoded=False, pool_size=multiprocessing.cpu_count(), **kwargs):
+
+def describe(df, bins=10, check_correlation=True, correlation_threshold=0.9, correlation_overrides=None,
+             check_recoded=False, pool_size=multiprocessing.cpu_count(), **kwargs):
     """Generates a dict containing summary statistics for a given dataset stored as a pandas `DataFrame`.
 
     Used has is it will output its content as an HTML report in a Jupyter notebook.
@@ -377,12 +443,12 @@ def describe(df, bins=10, check_correlation=True, correlation_threshold=0.9, cor
                     ldesc[x] = pd.Series(['CORR', y, corr], index=['type', 'correlation_var', 'correlation'])
 
         if check_recoded:
-            categorical_variables = [(name, data) for (name, data) in df.iteritems() if base.get_vartype(data)=='CAT']
+            categorical_variables = [(name, data) for (name, data) in df.iteritems() if base.get_vartype(data) == 'CAT']
             for (name1, data1), (name2, data2) in itertools.combinations(categorical_variables, 2):
                 if correlation_overrides and name1 in correlation_overrides:
                     continue
 
-                confusion_matrix=pd.crosstab(data1,data2)
+                confusion_matrix = pd.crosstab(data1, data2)
                 if confusion_matrix.values.diagonal().sum() == len(df):
                     ldesc[name1] = pd.Series(['RECODED', name2], index=['type', 'correlation_var'])
 
@@ -402,20 +468,24 @@ def describe(df, bins=10, check_correlation=True, correlation_threshold=0.9, cor
     table_stats['n'] = len(df)
     table_stats['nvar'] = len(df.columns)
     table_stats['total_missing'] = variable_stats.loc['n_missing'].sum() / (table_stats['n'] * table_stats['nvar'])
-    unsupported_columns = variable_stats.transpose()[variable_stats.transpose().type != base.S_TYPE_UNSUPPORTED].index.tolist()
+    unsupported_columns = variable_stats.transpose()[
+        variable_stats.transpose().type != base.S_TYPE_UNSUPPORTED].index.tolist()
     table_stats['n_duplicates'] = sum(df.duplicated(subset=unsupported_columns)) if len(unsupported_columns) > 0 else 0
 
     memsize = df.memory_usage(index=True).sum()
     table_stats['memsize'] = formatters.fmt_bytesize(memsize)
     table_stats['recordsize'] = formatters.fmt_bytesize(memsize / table_stats['n'])
 
-    table_stats.update({k: 0 for k in ("NUM", "DATE", "CONST", "CAT", "UNIQUE", "CORR", "RECODED", "BOOL", "UNSUPPORTED")})
+    table_stats.update(
+        {k: 0 for k in ("NUM", "DATE", "CONST", "CAT", "UNIQUE", "CORR", "RECODED", "BOOL", "UNSUPPORTED")})
     table_stats.update(dict(variable_stats.loc['type'].value_counts()))
     table_stats['REJECTED'] = table_stats['CONST'] + table_stats['CORR'] + table_stats['RECODED']
 
     return {
         'table': table_stats,
         'variables': variable_stats.T,
-        'freq': {k: (base.get_groupby_statistic(df[k])[0] if variable_stats[k].type != base.S_TYPE_UNSUPPORTED else None) for k in df.columns},
+        'freq': {
+        k: (base.get_groupby_statistic(df[k])[0] if variable_stats[k].type != base.S_TYPE_UNSUPPORTED else None) for k
+        in df.columns},
         'correlations': {'pearson': dfcorrPear, 'spearman': dfcorrSpear}
     }
