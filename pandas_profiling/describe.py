@@ -146,6 +146,15 @@ def describe_categorical_1d(series):
         names += ['top', 'freq', 'type']
         result += [top, freq, base.TYPE_CAT]
 
+        # Report max length and max trimmed length
+        max_trimmed_length = series.apply(lambda x:len((x or '').trim())).max()
+        names.append('max_trimmed_length')
+        result.append(max_trimmed_length)
+
+        max_length = series.apply(lambda x:len((x or ''))).max()
+        names.append('max_length')
+        result.append(max_length)
+
         # Add a mask type
         mask = series.apply(getMask)[series.apply(pd.notnull)]
         mask.name=mask.name+'_mask'
