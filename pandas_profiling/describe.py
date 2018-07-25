@@ -147,11 +147,12 @@ def describe_categorical_1d(series):
         result += [top, freq, base.TYPE_CAT]
 
         # Report max length and max trimmed length
-        max_trimmed_length = series.apply(lambda x:len((x or '').trim())).max()
+        series_str = series.fillna('')
+        max_trimmed_length = series_str.apply(lambda x:len(x.strip())).max()
         names.append('max_trimmed_length')
         result.append(max_trimmed_length)
 
-        max_length = series.apply(lambda x:len((x or ''))).max()
+        max_length = series_str.apply(lambda x:len(x)).max()
         names.append('max_length')
         result.append(max_length)
 
@@ -165,7 +166,7 @@ def describe_categorical_1d(series):
         # Find all special characters
         sc = mask.apply(lambda x:re.sub(r'[lLDs]','',x))
         sc_list = ''.join(sc.values)
-        sc_set = ' '.join(set(list(sc_list)))
+        sc_set = set(list(sc_list))
         names.append('sc_set')
         result.append(sc_set)
 
